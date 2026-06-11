@@ -147,7 +147,7 @@ CREATE TABLE ledger (
 CREATE TABLE outbox (
   id              TEXT PRIMARY KEY,
   request_id      TEXT NOT NULL,
-  operation       TEXT NOT NULL,             -- DEDUCT | REFUND
+  operation       TEXT NOT NULL,             -- DEDUCT (the only operation today)
   payload         TEXT NOT NULL,             -- JSON
   idempotency_key TEXT NOT NULL UNIQUE,
   status          TEXT NOT NULL,             -- PENDING | SENT | VERIFIED | FAILED
@@ -164,7 +164,10 @@ For every `(employee_id, location_id)` at all times:
 
 - **I1:** `SUM(ledger.amount) == balances.available` (ledger is the anchor; the
   projection is a cache of it)
-- **I2:** `available >= 0`
+- **I2:** `available >= 0` for every service-initiated mutation (holds, deductions). The
+  one exception is an external HCM clawback arriving via batch sync (§7.2 step 4), which
+  may push `available` negative; that state is recorded as drift and surfaced for human
+  action, never created by this service's own writes
 - **I3:** at most one ledger `HOLD_PLACED` (without matching release) and at most one
   `DEDUCTION_CONFIRMED` per request — no double-spend
 
@@ -236,8 +239,10 @@ corpus. Per `(employee, location)`:
    `RECONCILIATION_ADJUSTMENT` entry records the discrepancy and it appears in
    `GET /admin/reconciliation/drift`.
 4. If the new baseline makes `available` negative (HCM clawed back days already held),
-   the balance floors the projection at the true value, flags affected `PENDING`
-   requests, and reports them as drift — it does not auto-cancel; that's a human call.
+   the projection keeps the honest negative value, every affected `PENDING` request is
+   flagged in the drift report, and no new requests are accepted for that balance until
+   it is non-negative again. The service does not auto-cancel pending requests — that is
+   a manager's call, made from the drift report.
 
 **Why not blind overwrite:** the batch snapshot doesn't know about ReadyOn's pending
 holds; overwriting would briefly re-inflate `available` and open a double-booking window.
