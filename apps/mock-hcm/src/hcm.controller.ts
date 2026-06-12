@@ -2,7 +2,8 @@ import { Body, Controller, Get, HttpException, NotFoundException, Param, Post } 
 import { BalanceStoreService } from './balance-store.service';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const CHAOS_TIMEOUT_MS = Number(process.env.MOCK_HCM_TIMEOUT_MS ?? 10_000);
+// Read at call time so test suites can set the env after module load.
+const chaosTimeoutMs = () => Number(process.env.MOCK_HCM_TIMEOUT_MS ?? 10_000);
 
 @Controller()
 export class HcmController {
@@ -10,7 +11,7 @@ export class HcmController {
 
   @Get('balances/:employeeId/:locationId')
   async getBalance(@Param('employeeId') employeeId: string, @Param('locationId') locationId: string) {
-    if (this.store.chaosMode === 'timeout') await sleep(CHAOS_TIMEOUT_MS);
+    if (this.store.chaosMode === 'timeout') await sleep(chaosTimeoutMs());
     if (this.store.chaosMode === 'error500') throw new HttpException('chaos', 500);
     const balanceDays = this.store.get(employeeId, locationId);
     if (balanceDays === undefined) throw new NotFoundException();
@@ -23,7 +24,7 @@ export class HcmController {
   ) {
     switch (this.store.chaosMode) {
       case 'timeout':
-        await sleep(CHAOS_TIMEOUT_MS);
+        await sleep(chaosTimeoutMs());
         break;
       case 'error500':
         throw new HttpException('chaos', 500);

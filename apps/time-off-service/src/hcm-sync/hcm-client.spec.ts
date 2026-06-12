@@ -2,6 +2,10 @@
 import { HcmClient, HcmUnavailableError } from './hcm-client';
 import { bootMockHcm, MockHcm } from '../../test/utils';
 
+// Keep the mock's chaos sleep well above the 500ms client timeout but short enough
+// that the pending timer doesn't hold the jest process open for ~10s after the suite.
+process.env.MOCK_HCM_TIMEOUT_MS = '2000';
+
 describe('HcmClient', () => {
   let hcm: MockHcm;
   let client: HcmClient;
