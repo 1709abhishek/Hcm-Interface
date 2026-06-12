@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 // apps/time-off-service/test/property/invariants.spec.ts
 import fc from 'fast-check';
 import { INestApplication } from '@nestjs/common';
@@ -156,6 +157,22 @@ describe('invariants under random operation sequences', () => {
               // holds and taken are always non-negative
               expect(b.pendingHolds).toBeGreaterThanOrEqual(0);
               expect(b.taken).toBeGreaterThanOrEqual(0);
+
+              // I3: per request — never more than one outstanding hold, never more than one confirmed deduction
+              const perRequest = await ds.manager.query(
+                `SELECT request_id,
+                        SUM(CASE WHEN entry_type='HOLD_PLACED' THEN 1 ELSE 0 END) AS holds,
+                        SUM(CASE WHEN entry_type='HOLD_RELEASED' THEN 1 ELSE 0 END) AS releases,
+                        SUM(CASE WHEN entry_type='DEDUCTION_CONFIRMED' THEN 1 ELSE 0 END) AS confirms
+                 FROM ledger WHERE request_id IS NOT NULL GROUP BY request_id`,
+              );
+              for (const r of perRequest) {
+                expect(Number(r.holds)).toBeLessThanOrEqual(1);
+                expect(
+                  Number(r.holds) - Number(r.releases),
+                ).toBeGreaterThanOrEqual(0);
+                expect(Number(r.confirms)).toBeLessThanOrEqual(1);
+              }
             }
           } finally {
             await app.close();

@@ -45,7 +45,7 @@ curl 'localhost:3000/balances/e1/l1?verify=true'   # now baselineMatches: true
 | Unit + integration | `npx jest` | state machine edges, hold atomicity, idempotency, outbox |
 | Property-based | `npm run test:property` | ledger==projection, no negatives, model agreement under random op sequences |
 | Chaos e2e | `npm run test:e2e:chaos` | timeouts, 500s, silent failures, out-of-band changes — over real HTTP |
-| Coverage | `npm run test:cov` | report in `coverage/` — 96.7% lines / 80.18% branches |
+| Coverage | `npm run test:cov` | report in `coverage/` — 95.75% lines / 79.71% branches |
 | Mutation | `npm run mutation` | StrykerJS score: 75.26% (209 killed, 80 timeout, 73 survived / 384 total) — proof the tests catch regressions |
 
 CI runs all of the above on every push (`.github/workflows/ci.yml`).

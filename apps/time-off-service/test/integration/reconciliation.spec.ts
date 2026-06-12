@@ -8,6 +8,7 @@ import request from 'supertest';
 import { buildTestApp, bootMockHcm, MockHcm } from '../utils';
 import { RequestsService } from '../../src/requests/requests.service';
 import { OutboxDispatcher } from '../../src/hcm-sync/outbox-dispatcher';
+import { BalancesService } from '../../src/balances/balances.service';
 
 describe('reconciliation + ops endpoints', () => {
   let app: INestApplication;
@@ -93,5 +94,29 @@ describe('reconciliation + ops endpoints', () => {
     await http().get('/health').expect(200);
     hcm.store.chaosMode = 'error500';
     await http().get('/health').expect(503);
+  });
+
+  it('employees absent from a batch are left untouched (absence is not deletion)', async () => {
+    // Seed e1/l1 via applyBatch directly (simulates prior sync)
+    const balances = app.get(BalancesService);
+    await balances.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 10 },
+    ]);
+
+    // Verify e1 exists with the seeded balance
+    const before = await http().get('/balances/e1/l1').expect(200);
+    expect(before.body.availableDays).toBe(10);
+    const originalSyncedAt: string = before.body.lastSyncedAt as string;
+
+    // Apply a batch that only contains e2 — e1 is absent
+    await balances.applyBatch([
+      { employeeId: 'e2', locationId: 'l2', balanceDays: 5 },
+    ]);
+
+    // e1's projection must be unchanged (absence ≠ deletion — TRD §7.2)
+    const after = await http().get('/balances/e1/l1').expect(200);
+    expect(after.body.availableDays).toBe(10);
+    expect(after.body.accruedBaseline).toBe(10);
+    expect(after.body.lastSyncedAt).toBe(originalSyncedAt);
   });
 });

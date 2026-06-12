@@ -248,6 +248,8 @@ corpus. Per `(employee, location)`:
    it is non-negative again. The service does not auto-cancel pending requests — that is
    a manager's call, made from the drift report.
 
+**Employees absent from the batch corpus** are left untouched — absence is not treated as deletion (the HCM contract gives no tombstones). Their projections simply stop refreshing, visible via `last_synced_at` going stale; cleanup of truly departed employees is an operational concern (§12).
+
 **Why not blind overwrite:** the batch snapshot doesn't know about ReadyOn's pending
 holds; overwriting would briefly re-inflate `available` and open a double-booking window.
 **Why not flag-everything-for-review:** every legitimate accrual would page a human;
