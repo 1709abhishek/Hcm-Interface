@@ -273,7 +273,7 @@ All errors use `application/problem+json` with enumerated codes:
 
 | Method & Path | Description | Notable responses |
 |---|---|---|
-| `POST /time-off-requests` | Submit request. Requires `Idempotency-Key` header. Body: `employeeId, locationId, amountDays` | `201` PENDING · `422 INSUFFICIENT_BALANCE` · `422 INVALID_DIMENSIONS` · `200` original on duplicate key |
+| `POST /time-off-requests` | Submit request. Requires `Idempotency-Key` header. Body: `employeeId, locationId, amountDays` | `201` PENDING · `422 INSUFFICIENT_BALANCE` · `422 INVALID_DIMENSIONS` · duplicate key replays the original response (Stripe-style: same body, same `201`) |
 | `GET /time-off-requests/:id` | Request detail incl. status + failure reason | `200` · `404` |
 | `GET /time-off-requests?employeeId=&locationId=&status=` | Filtered list | `200` |
 | `POST /time-off-requests/:id/approve` | Manager approval. Body: `managerId` | `200` APPROVED · `409 INVALID_TRANSITION` |
