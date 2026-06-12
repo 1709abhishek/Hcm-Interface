@@ -18,3 +18,18 @@ export async function createTestDataSource(): Promise<DataSource> {
 }
 
 export const nowIso = () => new Date().toISOString();
+
+import { Test } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import { AppModule } from '../src/app.module';
+import { ProblemJsonFilter } from '../src/common/problem-json.filter';
+
+export async function buildTestApp(): Promise<INestApplication> {
+  process.env.NODE_ENV = 'test';
+  process.env.DB_PATH = ':memory:';
+  const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const app = mod.createNestApplication();
+  app.useGlobalFilters(new ProblemJsonFilter());
+  await app.init();
+  return app;
+}
