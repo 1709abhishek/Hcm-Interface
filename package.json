@@ -76,12 +76,20 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "apps/**/src/**/*.ts"
     ],
     "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "roots": [
       "<rootDir>/apps/"
+    ],
+    "coveragePathIgnorePatterns": [
+      "\\.spec\\.ts$",
+      "/main\\.ts$",
+      "\\.module\\.ts$"
     ]
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }
