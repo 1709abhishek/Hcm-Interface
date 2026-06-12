@@ -210,14 +210,18 @@ Approval writes the status change **and** an outbox row in the same SQLite trans
 A background dispatcher (NestJS interval scheduler) processes outbox rows:
 
 1. `POST` the deduction to the HCM realtime API with the row's idempotency key.
-2. **Verify:** `GET` the balance back and confirm the deduction applied. A `2xx`
-   response is *not* trusted on its own (challenge C4 — silent failures).
+2. **Verify:** confirm the deduction landed by looking it up by idempotency key
+   (`GET /deductions/:key`). A `2xx` write response is not trusted on its own (challenge
+   C4 — silent failures); a numeric balance compare is not used because out-of-band
+   changes would confound it.
 3. On verified success: mark `VERIFIED`, transition request to `SYNCED`, convert hold to
    `taken`, append `DEDUCTION_CONFIRMED`.
 4. On failure: exponential backoff with jitter (`1s · 2^attempts`, capped), max 8
-   attempts. On exhaustion or explicit HCM rejection: request → `SYNC_FAILED`, hold
-   released (`HOLD_RELEASED`), drift logged (`RECONCILIATION_ADJUSTMENT` with detail),
-   surfaced in the drift report for manager action.
+   attempts. On exhaustion or explicit HCM rejection: request → `SYNC_FAILED`,
+   `failure_reason` recorded on the request row, hold released (ledger entry:
+   `HOLD_RELEASED`), surfaced via the drift report's `syncFailedRequests` for manager
+   action. No `RECONCILIATION_ADJUSTMENT` is written — the only ledger entry is the
+   `HOLD_RELEASED`.
 
 **Why not call HCM synchronously during approval:** a synchronous call couples approval
 availability to HCM availability, and a timeout leaves the system *not knowing* whether

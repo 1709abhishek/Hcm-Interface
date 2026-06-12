@@ -8,6 +8,7 @@ import { OutboxRow } from './entities/outbox-row.entity';
 import { LedgerModule } from './ledger/ledger.module';
 import { BalancesModule } from './balances/balances.module';
 import { RequestsModule } from './requests/requests.module';
+import { HcmSyncModule } from './hcm-sync/hcm-sync.module';
 import { BalancesController } from './balances/balances.controller';
 import { RequestsController } from './requests/requests.controller';
 
@@ -24,6 +25,7 @@ import { RequestsController } from './requests/requests.controller';
     LedgerModule,
     BalancesModule,
     RequestsModule,
+    HcmSyncModule,
   ],
   controllers: [BalancesController, RequestsController],
 })
