@@ -30,6 +30,12 @@ curl -X POST localhost:3000/time-off-requests/<id>/approve \
 # watch it reach SYNCED (dispatcher runs every 2s)
 curl localhost:3000/time-off-requests/<id>
 curl 'localhost:3000/balances/e1/l1?verify=true'
+
+# Note: right after the deduction, HCM's balance is 7 but the local accrued
+# baseline is still 10 (HCM owns accruals; we refresh on batch sync), so
+# baselineMatches is false — expected. Re-sync to refresh the baseline:
+curl -X POST localhost:3000/sync/batch
+curl 'localhost:3000/balances/e1/l1?verify=true'   # now baselineMatches: true
 ```
 
 ## Test suite (the point of this exercise)

@@ -46,3 +46,4 @@ lerna-debug.log*
 # data files
 data/
 *.sqlite
+/reports
