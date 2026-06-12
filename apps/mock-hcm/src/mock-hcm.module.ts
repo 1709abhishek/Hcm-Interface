@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { MockHcmController } from './mock-hcm.controller';
-import { MockHcmService } from './mock-hcm.service';
+import { BalanceStoreService } from './balance-store.service';
+import { HcmController } from './hcm.controller';
+import { AdminController } from './admin.controller';
 
 @Module({
-  imports: [],
-  controllers: [MockHcmController],
-  providers: [MockHcmService],
+  controllers: [HcmController, AdminController],
+  providers: [BalanceStoreService],
+  exports: [BalanceStoreService],
 })
 export class MockHcmModule {}
