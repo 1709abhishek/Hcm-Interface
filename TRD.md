@@ -95,7 +95,7 @@ sequenceDiagram
     S-->>E: 200 APPROVED
     loop dispatcher (async, retries)
         S->>H: POST deduction (idempotency key)
-        S->>H: GET balance (verify it actually applied)
+        S->>H: GET /deductions/:key (verify it actually applied)
         S->>DB: TX: status=SYNCED, hold→taken, ledger DEDUCTION_CONFIRMED
     end
 ```
