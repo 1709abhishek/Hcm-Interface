@@ -8,4 +8,4 @@ async function bootstrap() {
   app.useGlobalFilters(new ProblemJsonFilter());
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+void bootstrap();

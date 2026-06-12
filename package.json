@@ -87,7 +87,13 @@
       "\\.spec\\.ts$",
       "/main\\.ts$",
       "\\.module\\.ts$"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 90,
+        "branches": 75
+      }
+    }
   },
   "engines": {
     "node": ">=20.19.0"

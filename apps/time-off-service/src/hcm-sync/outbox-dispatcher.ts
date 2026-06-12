@@ -21,29 +21,47 @@ export class OutboxDispatcher {
 
   /** One dispatch pass. Tests call this directly; the scheduler calls it on an interval. */
   async processOnce(opts: { ignoreBackoff?: boolean } = {}): Promise<void> {
-    const rows = await this.dataSource.manager.findBy(OutboxRow, { status: In(['PENDING', 'SENT']) });
+    const rows = await this.dataSource.manager.findBy(OutboxRow, {
+      status: In(['PENDING', 'SENT']),
+    });
     const now = Date.now();
     for (const row of rows) {
-      if (!opts.ignoreBackoff && row.nextRetryAt && new Date(row.nextRetryAt).getTime() > now) continue;
+      if (
+        !opts.ignoreBackoff &&
+        row.nextRetryAt &&
+        new Date(row.nextRetryAt).getTime() > now
+      )
+        continue;
       try {
         await this.processRow(row);
       } catch (e) {
-        this.logger.error(`outbox row ${row.id} (requestId=${row.requestId}) threw unexpectedly: ${(e as Error).message}`, (e as Error).stack);
+        this.logger.error(
+          `outbox row ${row.id} (requestId=${row.requestId}) threw unexpectedly: ${(e as Error).message}`,
+          (e as Error).stack,
+        );
       }
     }
   }
 
   private async processRow(row: OutboxRow): Promise<void> {
-    const payload: DeductionPayload = { ...JSON.parse(row.payload), idempotencyKey: row.idempotencyKey };
+    const parsed = JSON.parse(row.payload) as Omit<
+      DeductionPayload,
+      'idempotencyKey'
+    >;
+    const payload: DeductionPayload = {
+      ...parsed,
+      idempotencyKey: row.idempotencyKey,
+    };
     try {
       const response = await this.client.postDeduction(payload);
       // D2: never trust the write response alone — verify by idempotency-key lookup.
       const applied = await this.client.hasDeduction(row.idempotencyKey);
       if (applied) return this.succeed(row);
       if (!response.ok) return this.fail(row, response.code); // explicit HCM decision: permanent
-      return this.scheduleRetry(row, 'SILENT_FAILURE');       // 2xx but not applied: the lying HCM
+      return this.scheduleRetry(row, 'SILENT_FAILURE'); // 2xx but not applied: the lying HCM
     } catch (e) {
-      if (e instanceof HcmUnavailableError) return this.scheduleRetry(row, e.message);
+      if (e instanceof HcmUnavailableError)
+        return this.scheduleRetry(row, e.message);
       throw e;
     }
   }
@@ -69,8 +87,12 @@ export class OutboxDispatcher {
   private async scheduleRetry(row: OutboxRow, error: string): Promise<void> {
     row.attempts += 1;
     row.lastError = error;
-    if (row.attempts >= MAX_ATTEMPTS) return this.fail(row, 'RETRIES_EXHAUSTED');
-    const backoff = Math.min(BASE_BACKOFF_MS * 2 ** row.attempts, MAX_BACKOFF_MS);
+    if (row.attempts >= MAX_ATTEMPTS)
+      return this.fail(row, 'RETRIES_EXHAUSTED');
+    const backoff = Math.min(
+      BASE_BACKOFF_MS * 2 ** row.attempts,
+      MAX_BACKOFF_MS,
+    );
     const jitter = Math.floor(Math.random() * 250);
     row.status = 'SENT';
     row.nextRetryAt = new Date(Date.now() + backoff + jitter).toISOString();

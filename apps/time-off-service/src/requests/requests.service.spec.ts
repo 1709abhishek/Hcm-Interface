@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access */
+// Test file: res.body from supertest and Promise.all results are intentionally untyped
 // apps/time-off-service/src/requests/requests.service.spec.ts
 import { DataSource } from 'typeorm';
 import { createTestDataSource } from '../../test/utils';
@@ -19,13 +21,18 @@ describe('RequestsService', () => {
     const mutex = new DbMutex();
     balances = new BalancesService(ds, new LedgerService(), mutex);
     svc = new RequestsService(ds, balances, mutex);
-    await balances.applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 10 }]);
+    await balances.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 10 },
+    ]);
   });
-  afterEach(async () => { await ds.destroy(); });
+  afterEach(async () => {
+    await ds.destroy();
+  });
 
   const submit = (key = 'key-1', amountDays = 3) =>
     svc.submit({ employeeId: 'e1', locationId: 'l1', amountDays }, key);
-  const bal = () => ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
+  const bal = () =>
+    ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
 
   it('submit creates PENDING and places the hold (instant feedback)', async () => {
     const req = await submit();
@@ -41,7 +48,9 @@ describe('RequestsService', () => {
   });
 
   it('submit rejects insufficient balance; nothing persisted', async () => {
-    await expect(submit('key-big', 11)).rejects.toMatchObject(new AppError('INSUFFICIENT_BALANCE', 422));
+    await expect(submit('key-big', 11)).rejects.toMatchObject(
+      new AppError('INSUFFICIENT_BALANCE', 422),
+    );
     expect(await svc.findByIdempotencyKey('key-big')).toBeNull();
     expect(available(await bal())).toBe(10);
   });
@@ -56,7 +65,11 @@ describe('RequestsService', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('PENDING');
     expect(rows[0].idempotencyKey).toBe(`deduct-${req.id}`);
-    expect(JSON.parse(rows[0].payload)).toEqual({ employeeId: 'e1', locationId: 'l1', amountDays: 3 });
+    expect(JSON.parse(rows[0].payload)).toEqual({
+      employeeId: 'e1',
+      locationId: 'l1',
+      amountDays: 3,
+    });
   });
 
   it('deny and cancel release the hold', async () => {
@@ -72,8 +85,12 @@ describe('RequestsService', () => {
   it('illegal transitions surface INVALID_TRANSITION (409)', async () => {
     const req = await submit();
     await svc.approve(req.id, 'mgr-1');
-    await expect(svc.cancel(req.id)).rejects.toMatchObject(new AppError('INVALID_TRANSITION', 409));
-    await expect(svc.approve(req.id, 'mgr-1')).rejects.toMatchObject(new AppError('INVALID_TRANSITION', 409));
+    await expect(svc.cancel(req.id)).rejects.toMatchObject(
+      new AppError('INVALID_TRANSITION', 409),
+    );
+    await expect(svc.approve(req.id, 'mgr-1')).rejects.toMatchObject(
+      new AppError('INVALID_TRANSITION', 409),
+    );
   });
 
   it('markSynced confirms the deduction (hold → taken)', async () => {

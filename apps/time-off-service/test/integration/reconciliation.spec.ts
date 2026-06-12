@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
+// Test file: res.body and app.getHttpServer() from supertest/NestJS are intentionally untyped in integration tests
 process.env.MOCK_HCM_TIMEOUT_MS = '2000';
 
 // apps/time-off-service/test/integration/reconciliation.spec.ts
@@ -5,7 +7,6 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { buildTestApp, bootMockHcm, MockHcm } from '../utils';
 import { RequestsService } from '../../src/requests/requests.service';
-import { BalancesService } from '../../src/balances/balances.service';
 import { OutboxDispatcher } from '../../src/hcm-sync/outbox-dispatcher';
 
 describe('reconciliation + ops endpoints', () => {
@@ -19,7 +20,10 @@ describe('reconciliation + ops endpoints', () => {
     app = await buildTestApp();
     hcm.store.set('e1', 'l1', 10);
   });
-  afterEach(async () => { await app.close(); await hcm.app.close(); });
+  afterEach(async () => {
+    await app.close();
+    await hcm.app.close();
+  });
 
   const http = () => request(app.getHttpServer());
 
@@ -32,21 +36,31 @@ describe('reconciliation + ops endpoints', () => {
 
   it('anniversary bonus (C1): batch raises baseline, pending holds survive', async () => {
     await http().post('/sync/batch').expect(202);
-    await app.get(RequestsService).submit({ employeeId: 'e1', locationId: 'l1', amountDays: 4 }, 'k1');
+    await app
+      .get(RequestsService)
+      .submit({ employeeId: 'e1', locationId: 'l1', amountDays: 4 }, 'k1');
     hcm.store.set('e1', 'l1', 15); // out-of-band bonus in HCM
     await http().post('/sync/batch').expect(202);
     const bal = await http().get('/balances/e1/l1').expect(200);
-    expect(bal.body).toMatchObject({ accruedBaseline: 15, pendingHolds: 4, availableDays: 11 });
+    expect(bal.body).toMatchObject({
+      accruedBaseline: 15,
+      pendingHolds: 4,
+      availableDays: 11,
+    });
   });
 
   it('GET /admin/reconciliation/drift lists negative balances and SYNC_FAILED requests', async () => {
     await http().post('/sync/batch').expect(202);
     const requests = app.get(RequestsService);
-    const req = await requests.submit({ employeeId: 'e1', locationId: 'l1', amountDays: 3 }, 'k2');
+    const req = await requests.submit(
+      { employeeId: 'e1', locationId: 'l1', amountDays: 3 },
+      'k2',
+    );
     await requests.approve(req.id, 'm1');
     hcm.store.chaosMode = 'error500';
     const dispatcher = app.get(OutboxDispatcher);
-    for (let i = 0; i < 8; i++) await dispatcher.processOnce({ ignoreBackoff: true });
+    for (let i = 0; i < 8; i++)
+      await dispatcher.processOnce({ ignoreBackoff: true });
 
     const drift = await http().get('/admin/reconciliation/drift').expect(200);
     expect(drift.body.syncFailedRequests).toHaveLength(1);
@@ -54,7 +68,10 @@ describe('reconciliation + ops endpoints', () => {
 
     hcm.store.chaosMode = 'healthy';
     hcm.store.set('e1', 'l1', 0); // clawback below a new hold
-    await requests.submit({ employeeId: 'e1', locationId: 'l1', amountDays: 5 }, 'k3');
+    await requests.submit(
+      { employeeId: 'e1', locationId: 'l1', amountDays: 5 },
+      'k3',
+    );
     await http().post('/sync/batch').expect(202);
     const drift2 = await http().get('/admin/reconciliation/drift').expect(200);
     expect(drift2.body.negativeBalances).toEqual([
@@ -66,7 +83,10 @@ describe('reconciliation + ops endpoints', () => {
     await http().post('/sync/batch').expect(202);
     hcm.store.set('e1', 'l1', 12); // HCM moved, we have not synced
     const res = await http().get('/balances/e1/l1?verify=true').expect(200);
-    expect(res.body.hcmVerification).toEqual({ hcmBalanceDays: 12, baselineMatches: false });
+    expect(res.body.hcmVerification).toEqual({
+      hcmBalanceDays: 12,
+      baselineMatches: false,
+    });
   });
 
   it('GET /health reports HCM reachability', async () => {
