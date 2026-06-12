@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-core.json",
+  "testRunner": "jest",
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "apps/time-off-service/src/**/*.ts",
+    "!apps/time-off-service/src/**/*.spec.ts",
+    "!apps/time-off-service/src/main.ts",
+    "!apps/time-off-service/src/**/*.module.ts",
+    "!apps/time-off-service/src/hcm-sync/schedulers.ts"
+  ],
+  "jest": { "configFile": "package.json" },
+  "thresholds": { "high": 85, "low": 70, "break": 60 }
+}
