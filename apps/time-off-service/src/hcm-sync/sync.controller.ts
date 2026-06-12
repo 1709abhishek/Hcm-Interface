@@ -1,5 +1,11 @@
 // apps/time-off-service/src/hcm-sync/sync.controller.ts
-import { Controller, Get, HttpCode, Post, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ReconciliationService } from './reconciliation.service';
 import { HcmClient } from './hcm-client';
 
@@ -27,7 +33,10 @@ export class SyncController {
       await this.client.getBatch();
       return { status: 'ok', hcm: 'reachable' };
     } catch {
-      throw new ServiceUnavailableException({ status: 'degraded', hcm: 'unreachable' });
+      throw new ServiceUnavailableException({
+        status: 'degraded',
+        hcm: 'unreachable',
+      });
     }
   }
 }

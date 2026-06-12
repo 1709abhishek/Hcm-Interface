@@ -10,8 +10,21 @@ const LEGAL: [RequestStatus, RequestAction, RequestStatus][] = [
   ['APPROVED', 'syncFail', 'SYNC_FAILED'],
 ];
 
-const ALL_STATUSES: RequestStatus[] = ['PENDING', 'APPROVED', 'DENIED', 'CANCELLED', 'SYNCED', 'SYNC_FAILED'];
-const ALL_ACTIONS: RequestAction[] = ['approve', 'deny', 'cancel', 'syncSucceed', 'syncFail'];
+const ALL_STATUSES: RequestStatus[] = [
+  'PENDING',
+  'APPROVED',
+  'DENIED',
+  'CANCELLED',
+  'SYNCED',
+  'SYNC_FAILED',
+];
+const ALL_ACTIONS: RequestAction[] = [
+  'approve',
+  'deny',
+  'cancel',
+  'syncSucceed',
+  'syncFail',
+];
 
 describe('state machine', () => {
   it.each(LEGAL)('%s --%s--> %s', (from, action, to) => {
@@ -24,7 +37,9 @@ describe('state machine', () => {
       for (const action of ALL_ACTIONS) {
         if (legalSet.has(`${from}:${action}`)) continue;
         expect(() => nextStatus(from, action)).toThrow(AppError);
-        try { nextStatus(from, action); } catch (e) {
+        try {
+          nextStatus(from, action);
+        } catch (e) {
           expect((e as AppError).code).toBe('INVALID_TRANSITION');
           expect((e as AppError).status).toBe(409);
         }

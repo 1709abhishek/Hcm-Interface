@@ -12,7 +12,9 @@ export class DbMutex {
 
   run<T>(fn: () => Promise<T>): Promise<T> {
     let release!: () => void;
-    const next = new Promise<void>((resolve) => { release = resolve; });
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const result = this.queue.then(() => fn()).finally(() => release());
     this.queue = next;
     return result;

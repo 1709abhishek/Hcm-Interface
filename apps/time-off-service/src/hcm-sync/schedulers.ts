@@ -11,8 +11,12 @@ export class HcmSyncSchedulers {
   ) {}
 
   @Interval(2000)
-  dispatchTick() { return this.dispatcher.processOnce(); }
+  dispatchTick() {
+    return this.dispatcher.processOnce();
+  }
 
   @Cron('0 2 * * *') // nightly batch reconciliation
-  nightlyBatch() { return this.reconciliation.runBatchSync(); }
+  nightlyBatch() {
+    return this.reconciliation.runBatchSync();
+  }
 }

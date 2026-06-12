@@ -26,17 +26,27 @@ describe('OutboxDispatcher', () => {
     requests = app.get(RequestsService);
     ds = app.get(DataSource);
     hcm.store.set('e1', 'l1', 10);
-    await app.get(BalancesService).applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 10 }]);
+    await app
+      .get(BalancesService)
+      .applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 10 }]);
   });
-  afterEach(async () => { await app.close(); await hcm.app.close(); });
+  afterEach(async () => {
+    await app.close();
+    await hcm.app.close();
+  });
 
   async function approvedRequest(amountDays = 3) {
-    const req = await requests.submit({ employeeId: 'e1', locationId: 'l1', amountDays }, `k-${Math.random()}`);
+    const req = await requests.submit(
+      { employeeId: 'e1', locationId: 'l1', amountDays },
+      `k-${Math.random()}`,
+    );
     await requests.approve(req.id, 'm1');
     return req;
   }
-  const outboxRow = (requestId: string) => ds.manager.findOneByOrFail(OutboxRow, { requestId });
-  const bal = () => ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
+  const outboxRow = (requestId: string) =>
+    ds.manager.findOneByOrFail(OutboxRow, { requestId });
+  const bal = () =>
+    ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
 
   it('happy path: sends, verifies, marks VERIFIED and request SYNCED', async () => {
     const req = await approvedRequest();
@@ -54,7 +64,7 @@ describe('OutboxDispatcher', () => {
     hcm.store.chaosMode = 'silent-failure';
     await dispatcher.processOnce();
     let row = await outboxRow(req.id);
-    expect(row.status).toBe('SENT');           // not VERIFIED — the lie was caught
+    expect(row.status).toBe('SENT'); // not VERIFIED — the lie was caught
     expect(row.attempts).toBe(1);
     expect((await requests.getById(req.id)).status).toBe('APPROVED');
 
@@ -99,7 +109,8 @@ describe('OutboxDispatcher', () => {
   it('retries exhausted (D5): after maxAttempts the row FAILS and the request is SYNC_FAILED', async () => {
     const req = await approvedRequest();
     hcm.store.chaosMode = 'error500';
-    for (let i = 0; i < 8; i++) await dispatcher.processOnce({ ignoreBackoff: true });
+    for (let i = 0; i < 8; i++)
+      await dispatcher.processOnce({ ignoreBackoff: true });
     expect((await outboxRow(req.id)).status).toBe('FAILED');
     const failed = await requests.getById(req.id);
     expect(failed.status).toBe('SYNC_FAILED');
@@ -122,7 +133,9 @@ describe('OutboxDispatcher', () => {
     const row = await outboxRow(req.id);
     row.status = 'SENT';
     await ds.manager.save(row);
-    await expect(dispatcher.processOnce({ ignoreBackoff: true })).resolves.not.toThrow();
+    await expect(
+      dispatcher.processOnce({ ignoreBackoff: true }),
+    ).resolves.not.toThrow();
     expect((await outboxRow(req.id)).status).toBe('VERIFIED');
     const b = await bal();
     expect(b.taken).toBe(3); // not double-confirmed
@@ -138,7 +151,9 @@ describe('OutboxDispatcher', () => {
     const row = await outboxRow(req.id);
     row.status = 'SENT'; // simulate crash before row save
     await ds.manager.save(row);
-    await expect(dispatcher.processOnce({ ignoreBackoff: true })).resolves.not.toThrow();
+    await expect(
+      dispatcher.processOnce({ ignoreBackoff: true }),
+    ).resolves.not.toThrow();
     expect((await outboxRow(req.id)).status).toBe('FAILED');
     expect((await requests.getById(req.id)).status).toBe('SYNC_FAILED');
     expect(available(await bal())).toBe(10); // hold released exactly once

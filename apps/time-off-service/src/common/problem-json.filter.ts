@@ -1,4 +1,9 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { AppError } from './app-error';
 
@@ -17,8 +22,14 @@ export class ProblemJsonFilter implements ExceptionFilter {
       status = exception.getStatus();
       title = exception.message;
     }
-    res.status(status)
+    res
+      .status(status)
       .type('application/problem+json')
-      .json({ type: 'about:blank', title, status, ...(detail ? { detail } : {}) });
+      .json({
+        type: 'about:blank',
+        title,
+        status,
+        ...(detail ? { detail } : {}),
+      });
   }
 }

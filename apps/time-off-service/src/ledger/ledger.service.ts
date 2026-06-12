@@ -16,14 +16,24 @@ export interface LedgerInput {
 export class LedgerService {
   /** Must be called inside the same transaction as the balance mutation it records. */
   async append(em: EntityManager, input: LedgerInput): Promise<void> {
-    await em.insert(LedgerEntry, { ...input, createdAt: new Date().toISOString() });
+    await em.insert(LedgerEntry, {
+      ...input,
+      createdAt: new Date().toISOString(),
+    });
   }
 
-  async sumFor(em: EntityManager, employeeId: string, locationId: string): Promise<number> {
+  async sumFor(
+    em: EntityManager,
+    employeeId: string,
+    locationId: string,
+  ): Promise<number> {
     const row = await em
       .createQueryBuilder(LedgerEntry, 'l')
       .select('COALESCE(SUM(l.amount), 0)', 'total')
-      .where('l.employee_id = :employeeId AND l.location_id = :locationId', { employeeId, locationId })
+      .where('l.employee_id = :employeeId AND l.location_id = :locationId', {
+        employeeId,
+        locationId,
+      })
       .getRawOne<{ total: number }>();
     return Number(row?.total ?? 0);
   }

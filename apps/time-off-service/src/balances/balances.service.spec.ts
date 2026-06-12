@@ -16,11 +16,16 @@ describe('BalancesService', () => {
     ds = await createTestDataSource();
     ledger = new LedgerService();
     svc = new BalancesService(ds, ledger, new DbMutex());
-    await svc.applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 10 }]);
+    await svc.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 10 },
+    ]);
   });
-  afterEach(async () => { await ds.destroy(); });
+  afterEach(async () => {
+    await ds.destroy();
+  });
 
-  const get = () => ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
+  const get = () =>
+    ds.manager.findOneByOrFail(Balance, { employeeId: 'e1', locationId: 'l1' });
 
   it('applyBatch creates the projection and an ACCRUAL_SYNC ledger entry (I1 holds)', async () => {
     const b = await get();
@@ -52,7 +57,9 @@ describe('BalancesService', () => {
 
   it('concurrent holds cannot oversubscribe (D4)', async () => {
     const results = await Promise.allSettled(
-      Array.from({ length: 10 }, (_, i) => svc.placeHold('e1', 'l1', 3, `r${i}`)),
+      Array.from({ length: 10 }, (_, i) =>
+        svc.placeHold('e1', 'l1', 3, `r${i}`),
+      ),
     );
     const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
     expect(fulfilled).toBe(3); // 3 × 3 = 9 ≤ 10; a 4th would need 12
@@ -81,7 +88,9 @@ describe('BalancesService', () => {
 
   it('applyBatch replaces baseline but preserves pending holds (hold-aware merge, C1)', async () => {
     await svc.placeHold('e1', 'l1', 3, 'r1');
-    await svc.applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 15 }]); // anniversary bonus
+    await svc.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 15 },
+    ]); // anniversary bonus
     const b = await get();
     expect(b.accruedBaseline).toBe(15);
     expect(b.pendingHolds).toBe(3);
@@ -91,10 +100,14 @@ describe('BalancesService', () => {
 
   it('applyBatch clawback below holds goes honestly negative and reports drift', async () => {
     await svc.placeHold('e1', 'l1', 8, 'r1');
-    const summary = await svc.applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 5 }]);
+    const summary = await svc.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 5 },
+    ]);
     const b = await get();
     expect(available(b)).toBe(-3);
-    expect(summary.negative).toEqual([{ employeeId: 'e1', locationId: 'l1', available: -3 }]);
+    expect(summary.negative).toEqual([
+      { employeeId: 'e1', locationId: 'l1', available: -3 },
+    ]);
     expect(await ledger.sumFor(ds.manager, 'e1', 'l1')).toBe(-3); // I1 still holds
   });
 });

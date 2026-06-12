@@ -1,5 +1,14 @@
 // apps/time-off-service/src/requests/requests.controller.ts
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import type { SubmitDto } from './requests.service';
 
@@ -8,7 +17,10 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Post()
-  submit(@Body() dto: SubmitDto, @Headers('idempotency-key') idempotencyKey: string) {
+  submit(
+    @Body() dto: SubmitDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
     return this.requests.submit(dto, idempotencyKey);
   }
 

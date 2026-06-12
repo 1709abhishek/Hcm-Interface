@@ -1,14 +1,30 @@
 import { Injectable } from '@nestjs/common';
 
-export interface HcmBalance { employeeId: string; locationId: string; balanceDays: number; }
-export type ChaosMode = 'healthy' | 'timeout' | 'error500' | 'silent-failure' | 'reject-insufficient';
-export type DeductionResult = 'applied' | 'duplicate' | 'insufficient' | 'unknown-dimensions';
+export interface HcmBalance {
+  employeeId: string;
+  locationId: string;
+  balanceDays: number;
+}
+export type ChaosMode =
+  | 'healthy'
+  | 'timeout'
+  | 'error500'
+  | 'silent-failure'
+  | 'reject-insufficient';
+export type DeductionResult =
+  | 'applied'
+  | 'duplicate'
+  | 'insufficient'
+  | 'unknown-dimensions';
 
 @Injectable()
 export class BalanceStoreService {
   chaosMode: ChaosMode = 'healthy';
   private balances = new Map<string, number>();
-  private deductions = new Map<string, { employeeId: string; locationId: string; amountDays: number }>();
+  private deductions = new Map<
+    string,
+    { employeeId: string; locationId: string; amountDays: number }
+  >();
 
   private key(employeeId: string, locationId: string): string {
     return `${employeeId}:${locationId}`;
@@ -29,7 +45,12 @@ export class BalanceStoreService {
     });
   }
 
-  applyDeduction(idempotencyKey: string, employeeId: string, locationId: string, amountDays: number): DeductionResult {
+  applyDeduction(
+    idempotencyKey: string,
+    employeeId: string,
+    locationId: string,
+    amountDays: number,
+  ): DeductionResult {
     if (this.deductions.has(idempotencyKey)) return 'duplicate';
     const current = this.get(employeeId, locationId);
     if (current === undefined) return 'unknown-dimensions';

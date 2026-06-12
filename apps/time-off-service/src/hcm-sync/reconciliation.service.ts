@@ -27,8 +27,15 @@ export class ReconciliationService {
     const balances = await this.dataSource.manager.find(Balance);
     const negativeBalances = balances
       .filter((b) => available(b) < 0)
-      .map((b) => ({ employeeId: b.employeeId, locationId: b.locationId, available: available(b) }));
-    const syncFailedRequests = await this.dataSource.manager.findBy(TimeOffRequest, { status: 'SYNC_FAILED' });
+      .map((b) => ({
+        employeeId: b.employeeId,
+        locationId: b.locationId,
+        available: available(b),
+      }));
+    const syncFailedRequests = await this.dataSource.manager.findBy(
+      TimeOffRequest,
+      { status: 'SYNC_FAILED' },
+    );
     return { adjustments, negativeBalances, syncFailedRequests };
   }
 }

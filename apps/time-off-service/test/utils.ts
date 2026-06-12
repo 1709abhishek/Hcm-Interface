@@ -27,7 +27,9 @@ import { ProblemJsonFilter } from '../src/common/problem-json.filter';
 export async function buildTestApp(): Promise<INestApplication> {
   process.env.NODE_ENV = 'test';
   process.env.DB_PATH = ':memory:';
-  const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const mod = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
   const app = mod.createNestApplication();
   app.useGlobalFilters(new ProblemJsonFilter());
   await app.init();
@@ -37,12 +39,22 @@ export async function buildTestApp(): Promise<INestApplication> {
 import { MockHcmModule } from '../../mock-hcm/src/mock-hcm.module';
 import { BalanceStoreService } from '../../mock-hcm/src/balance-store.service';
 
-export interface MockHcm { app: INestApplication; baseUrl: string; store: BalanceStoreService; }
+export interface MockHcm {
+  app: INestApplication;
+  baseUrl: string;
+  store: BalanceStoreService;
+}
 
 export async function bootMockHcm(): Promise<MockHcm> {
-  const mod = await Test.createTestingModule({ imports: [MockHcmModule] }).compile();
+  const mod = await Test.createTestingModule({
+    imports: [MockHcmModule],
+  }).compile();
   const app = mod.createNestApplication();
   await app.listen(0); // ephemeral port
   const baseUrl = await app.getUrl();
-  return { app, baseUrl: baseUrl.replace('[::1]', '127.0.0.1'), store: app.get(BalanceStoreService) };
+  return {
+    app,
+    baseUrl: baseUrl.replace('[::1]', '127.0.0.1'),
+    store: app.get(BalanceStoreService),
+  };
 }

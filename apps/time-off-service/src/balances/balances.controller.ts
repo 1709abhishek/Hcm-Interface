@@ -20,8 +20,14 @@ export class BalancesController {
     const b = await this.balances.getBalance(employeeId, locationId);
     const body: Record<string, unknown> = { ...b, availableDays: available(b) };
     if (verify === 'true') {
-      const hcmBalanceDays = await this.client.getBalance(employeeId, locationId);
-      body.hcmVerification = { hcmBalanceDays, baselineMatches: hcmBalanceDays === b.accruedBaseline };
+      const hcmBalanceDays = await this.client.getBalance(
+        employeeId,
+        locationId,
+      );
+      body.hcmVerification = {
+        hcmBalanceDays,
+        baselineMatches: hcmBalanceDays === b.accruedBaseline,
+      };
     }
     return body;
   }

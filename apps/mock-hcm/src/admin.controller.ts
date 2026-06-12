@@ -6,7 +6,14 @@ export class AdminController {
   constructor(private readonly store: BalanceStoreService) {}
 
   @Post('admin/balances')
-  seed(@Body() body: { employeeId: string; locationId: string; balanceDays: number }) {
+  seed(
+    @Body()
+    body: {
+      employeeId: string;
+      locationId: string;
+      balanceDays: number;
+    },
+  ) {
     this.store.set(body.employeeId, body.locationId, body.balanceDays);
     return { status: 'ok' };
   }
