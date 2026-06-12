@@ -25,7 +25,11 @@ export class OutboxDispatcher {
     const now = Date.now();
     for (const row of rows) {
       if (!opts.ignoreBackoff && row.nextRetryAt && new Date(row.nextRetryAt).getTime() > now) continue;
-      await this.processRow(row);
+      try {
+        await this.processRow(row);
+      } catch (e) {
+        this.logger.error(`outbox row ${row.id} (requestId=${row.requestId}) threw unexpectedly: ${(e as Error).message}`, (e as Error).stack);
+      }
     }
   }
 
@@ -52,10 +56,13 @@ export class OutboxDispatcher {
   }
 
   private async fail(row: OutboxRow, reason: string): Promise<void> {
+    // markSyncFailed FIRST (request is the anchor): if we crash after this but before row save,
+    // the row stays SENT and is re-processed next tick — markSyncFailed will be a no-op (idempotent)
+    // and the row will be saved FAILED then. Converges without leaking the hold.
+    await this.requests.markSyncFailed(row.requestId, reason); // releases hold, records reason (D5)
     row.status = 'FAILED';
     row.lastError = reason;
     await this.dataSource.manager.save(row);
-    await this.requests.markSyncFailed(row.requestId, reason); // releases hold, records reason (D5)
     this.logger.warn(`outbox ${row.id} failed permanently: ${reason}`);
   }
 

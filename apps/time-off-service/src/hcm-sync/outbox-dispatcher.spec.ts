@@ -114,4 +114,33 @@ describe('OutboxDispatcher', () => {
     expect(hcm.store.get('e1', 'l1')).toBe(7);
     expect((await requests.getById(req.id)).status).toBe('SYNCED');
   });
+
+  it('crash recovery: SENT row whose request is already SYNCED converges to VERIFIED without throwing', async () => {
+    const req = await approvedRequest();
+    await dispatcher.processOnce(); // normal success: SYNCED + VERIFIED
+    // simulate the crash window: row back to SENT, request stays SYNCED
+    const row = await outboxRow(req.id);
+    row.status = 'SENT';
+    await ds.manager.save(row);
+    await expect(dispatcher.processOnce({ ignoreBackoff: true })).resolves.not.toThrow();
+    expect((await outboxRow(req.id)).status).toBe('VERIFIED');
+    const b = await bal();
+    expect(b.taken).toBe(3); // not double-confirmed
+    expect(b.pendingHolds).toBe(0);
+  });
+
+  it('crash recovery: markSyncFailed-before-row-save means a crash cannot strand an APPROVED request', async () => {
+    // verifies fail() ordering: after a permanent rejection, request reaches SYNC_FAILED
+    // and re-processing the row (simulating row-save crash) is harmless
+    const req = await approvedRequest(3);
+    hcm.store.set('e1', 'l1', 1); // out-of-band clawback → HCM rejects
+    await dispatcher.processOnce();
+    const row = await outboxRow(req.id);
+    row.status = 'SENT'; // simulate crash before row save
+    await ds.manager.save(row);
+    await expect(dispatcher.processOnce({ ignoreBackoff: true })).resolves.not.toThrow();
+    expect((await outboxRow(req.id)).status).toBe('FAILED');
+    expect((await requests.getById(req.id)).status).toBe('SYNC_FAILED');
+    expect(available(await bal())).toBe(10); // hold released exactly once
+  });
 });

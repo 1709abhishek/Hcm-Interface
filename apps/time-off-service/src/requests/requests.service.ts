@@ -101,6 +101,8 @@ export class RequestsService {
       this.dataSource.transaction(async (em) => {
         const req = await em.findOneBy(TimeOffRequest, { id });
         if (!req) throw new AppError('NOT_FOUND', 404);
+        // Idempotency: if already SYNCED (crash-recovery re-run), skip all mutations.
+        if (req.status === 'SYNCED') return;
         req.status = nextStatus(req.status, 'syncSucceed');
         req.updatedAt = new Date().toISOString();
         await em.save(req);
@@ -115,6 +117,8 @@ export class RequestsService {
       this.dataSource.transaction(async (em) => {
         const req = await em.findOneBy(TimeOffRequest, { id });
         if (!req) throw new AppError('NOT_FOUND', 404);
+        // Idempotency: if already SYNC_FAILED (crash-recovery re-run), skip all mutations.
+        if (req.status === 'SYNC_FAILED') return;
         req.status = nextStatus(req.status, 'syncFail');
         req.failureReason = reason;
         req.updatedAt = new Date().toISOString();
