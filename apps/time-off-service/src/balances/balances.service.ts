@@ -18,7 +18,7 @@ export class BalancesService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly ledger: LedgerService,
-    private readonly mutex: DbMutex = new DbMutex(),
+    private readonly mutex: DbMutex,
   ) {}
 
   async getBalance(employeeId: string, locationId: string): Promise<Balance> {

@@ -1,6 +1,6 @@
 // apps/time-off-service/src/requests/requests.service.ts
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { TimeOffRequest } from '../entities/time-off-request.entity';
 import { OutboxRow } from '../entities/outbox-row.entity';
@@ -28,18 +28,28 @@ export class RequestsService {
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    return this.mutex.run(() =>
-      this.dataSource.transaction(async (em) => {
-        // placeHoldInTx validates dimensions + sufficiency (D1) and appends HOLD_PLACED
-        await this.balances.placeHoldInTx(em, dto.employeeId, dto.locationId, dto.amountDays, id);
-        const req = em.create(TimeOffRequest, {
-          id, ...dto, status: 'PENDING', idempotencyKey,
-          managerId: null, failureReason: null, createdAt: now, updatedAt: now,
-        });
-        await em.save(req);
-        return req;
-      }),
-    );
+    try {
+      return await this.mutex.run(() =>
+        this.dataSource.transaction(async (em) => {
+          // placeHoldInTx validates dimensions + sufficiency (D1) and appends HOLD_PLACED
+          await this.balances.placeHoldInTx(em, dto.employeeId, dto.locationId, dto.amountDays, id);
+          const req = em.create(TimeOffRequest, {
+            id, ...dto, status: 'PENDING', idempotencyKey,
+            managerId: null, failureReason: null, createdAt: now, updatedAt: now,
+          });
+          await em.save(req);
+          return req;
+        }),
+      );
+    } catch (err) {
+      // D3 race: two concurrent callers both passed the pre-check; the second hits the UNIQUE
+      // constraint on idempotency_key. The failed transaction already rolled back the hold.
+      if (err instanceof QueryFailedError && String((err as any).message).includes('UNIQUE constraint failed')) {
+        const existing = await this.findByIdempotencyKey(idempotencyKey);
+        if (existing) return existing;
+      }
+      throw err;
+    }
   }
 
   async approve(id: string, managerId: string): Promise<TimeOffRequest> {
@@ -89,7 +99,8 @@ export class RequestsService {
   async markSynced(id: string): Promise<void> {
     await this.mutex.run(() =>
       this.dataSource.transaction(async (em) => {
-        const req = await em.findOneByOrFail(TimeOffRequest, { id });
+        const req = await em.findOneBy(TimeOffRequest, { id });
+        if (!req) throw new AppError('NOT_FOUND', 404);
         req.status = nextStatus(req.status, 'syncSucceed');
         req.updatedAt = new Date().toISOString();
         await em.save(req);
@@ -102,7 +113,8 @@ export class RequestsService {
   async markSyncFailed(id: string, reason: string): Promise<void> {
     await this.mutex.run(() =>
       this.dataSource.transaction(async (em) => {
-        const req = await em.findOneByOrFail(TimeOffRequest, { id });
+        const req = await em.findOneBy(TimeOffRequest, { id });
+        if (!req) throw new AppError('NOT_FOUND', 404);
         req.status = nextStatus(req.status, 'syncFail');
         req.failureReason = reason;
         req.updatedAt = new Date().toISOString();

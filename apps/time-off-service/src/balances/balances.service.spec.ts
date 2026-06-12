@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { createTestDataSource } from '../../test/utils';
 import { BalancesService } from './balances.service';
 import { LedgerService } from '../ledger/ledger.service';
+import { DbMutex } from '../common/db-mutex';
 import { AppError } from '../common/app-error';
 import { Balance, available } from '../entities/balance.entity';
 
@@ -14,7 +15,7 @@ describe('BalancesService', () => {
   beforeEach(async () => {
     ds = await createTestDataSource();
     ledger = new LedgerService();
-    svc = new BalancesService(ds, ledger);
+    svc = new BalancesService(ds, ledger, new DbMutex());
     await svc.applyBatch([{ employeeId: 'e1', locationId: 'l1', balanceDays: 10 }]);
   });
   afterEach(async () => { await ds.destroy(); });

@@ -95,4 +95,16 @@ describe('RequestsService', () => {
     expect(updated.failureReason).toBe('RETRIES_EXHAUSTED');
     expect(available(await bal())).toBe(10); // hold released
   });
+
+  it('concurrent submits with the same Idempotency-Key: one request, one hold (D3 race)', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => submit('race-key', 3).catch((e) => e)),
+    );
+    const requests = results.filter((r) => !(r instanceof Error));
+    expect(requests.length).toBe(5); // every caller gets a request back, none errors
+    const ids = new Set(requests.map((r) => r.id));
+    expect(ids.size).toBe(1); // and it is the SAME request
+    const b = await bal();
+    expect(b.pendingHolds).toBe(3); // exactly one hold
+  });
 });
