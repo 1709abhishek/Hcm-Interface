@@ -261,11 +261,7 @@ Numbered, because the test suite references them:
 - **D3 — Retries are always safe.** Idempotency keys on our API (`Idempotency-Key`
   header, unique column) and on HCM writes (outbox key). Replays return the original
   result; they never re-execute.
-- **D4 — No lost updates.** Holds are placed with an atomic conditional
-  `UPDATE … SET pending_holds = pending_holds + :amt WHERE available >= :amt`
-  (affected-rows check) inside a transaction. SQLite's serialized writer makes this
-  race-free. *(Why not optimistic version columns or per-employee queues: more machinery
-  than a serialized-writer DB needs; §10 notes the Postgres equivalent.)*
+- **D4 — No lost updates.** Holds are placed by read-validate-write inside a database transaction, serialized by a process-wide write mutex (better-sqlite3 exposes a single connection; concurrent TypeORM transactions would otherwise collide on BEGIN). This restores the single-writer guarantee the design relies on. *(Why not optimistic version columns or per-employee queues: more machinery than a serialized-writer DB needs. On Postgres, the same logic becomes `SELECT … FOR UPDATE` or an atomic conditional `UPDATE … WHERE available >= :amount` — the service interface doesn't change.)*
 - **D5 — Failures are visible, not silent.** Exhausted retries and reconciliation drift
   land in the ledger and the drift report endpoint, never in a log line alone.
 

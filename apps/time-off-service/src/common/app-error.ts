@@ -8,6 +8,6 @@ export class AppError extends Error {
     public readonly status: number,
     public readonly detail?: string,
   ) {
-    super(detail ?? code);
+    super(code);
   }
 }

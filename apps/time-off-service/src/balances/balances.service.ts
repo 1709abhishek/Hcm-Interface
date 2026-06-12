@@ -4,6 +4,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { Balance, available } from '../entities/balance.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { AppError } from '../common/app-error';
+import { DbMutex } from '../common/db-mutex';
 
 export interface BatchEntry { employeeId: string; locationId: string; balanceDays: number; }
 export interface BatchSummary {
@@ -12,31 +13,12 @@ export interface BatchSummary {
   negative: { employeeId: string; locationId: string; available: number }[];
 }
 
-/**
- * Minimal promise-based mutex.
- * Better-sqlite3 uses a single synchronous connection; TypeORM wraps it in async,
- * which means concurrent `dataSource.transaction()` calls will collide on BEGIN.
- * Serialising through this mutex restores the "single-writer" guarantee the TRD relies on.
- */
-class DbMutex {
-  private queue: Promise<void> = Promise.resolve();
-
-  run<T>(fn: () => Promise<T>): Promise<T> {
-    let release!: () => void;
-    const next = new Promise<void>((resolve) => { release = resolve; });
-    const result = this.queue.then(() => fn()).finally(() => release());
-    this.queue = next;
-    return result;
-  }
-}
-
 @Injectable()
 export class BalancesService {
-  private readonly mutex = new DbMutex();
-
   constructor(
     private readonly dataSource: DataSource,
     private readonly ledger: LedgerService,
+    private readonly mutex: DbMutex = new DbMutex(),
   ) {}
 
   async getBalance(employeeId: string, locationId: string): Promise<Balance> {
@@ -47,49 +29,49 @@ export class BalancesService {
 
   /** D1 + D4: validate locally, mutate + ledger in one TX (race-free: single serialized SQLite writer). */
   async placeHold(employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
-    await this.mutex.run(async () => {
-      await this.dataSource.transaction(async (em) => {
-        const b = await em.findOneBy(Balance, { employeeId, locationId });
-        if (!b) throw new AppError('INVALID_DIMENSIONS', 422);
-        if (available(b) < amountDays) throw new AppError('INSUFFICIENT_BALANCE', 422);
-        b.pendingHolds += amountDays;
-        await em.save(b);
-        await this.ledger.append(em, {
-          employeeId, locationId, entryType: 'HOLD_PLACED',
-          amount: -amountDays, balanceAfter: available(b), requestId, detail: null,
-        });
-      });
+    await this.mutex.run(() => this.dataSource.transaction((em) => this.placeHoldInTx(em, employeeId, locationId, amountDays, requestId)));
+  }
+
+  async placeHoldInTx(em: EntityManager, employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
+    const b = await em.findOneBy(Balance, { employeeId, locationId });
+    if (!b) throw new AppError('INVALID_DIMENSIONS', 422);
+    if (available(b) < amountDays) throw new AppError('INSUFFICIENT_BALANCE', 422);
+    b.pendingHolds += amountDays;
+    await em.save(b);
+    await this.ledger.append(em, {
+      employeeId, locationId, entryType: 'HOLD_PLACED',
+      amount: -amountDays, balanceAfter: available(b), requestId, detail: null,
     });
   }
 
   async releaseHold(employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
-    await this.mutex.run(async () => {
-      await this.dataSource.transaction(async (em) => {
-        const b = await em.findOneByOrFail(Balance, { employeeId, locationId });
-        b.pendingHolds -= amountDays;
-        await em.save(b);
-        await this.ledger.append(em, {
-          employeeId, locationId, entryType: 'HOLD_RELEASED',
-          amount: amountDays, balanceAfter: available(b), requestId, detail: null,
-        });
-      });
+    await this.mutex.run(() => this.dataSource.transaction((em) => this.releaseHoldInTx(em, employeeId, locationId, amountDays, requestId)));
+  }
+
+  async releaseHoldInTx(em: EntityManager, employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
+    const b = await em.findOneByOrFail(Balance, { employeeId, locationId });
+    b.pendingHolds -= amountDays;
+    await em.save(b);
+    await this.ledger.append(em, {
+      employeeId, locationId, entryType: 'HOLD_RELEASED',
+      amount: amountDays, balanceAfter: available(b), requestId, detail: null,
     });
   }
 
   /** Hold → taken. Net delta to available is 0; the entry is the audit record of the confirmed deduction. */
   async confirmDeduction(employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
-    await this.mutex.run(async () => {
-      await this.dataSource.transaction(async (em) => {
-        const b = await em.findOneByOrFail(Balance, { employeeId, locationId });
-        b.pendingHolds -= amountDays;
-        b.taken += amountDays;
-        await em.save(b);
-        await this.ledger.append(em, {
-          employeeId, locationId, entryType: 'DEDUCTION_CONFIRMED',
-          amount: 0, balanceAfter: available(b), requestId,
-          detail: JSON.stringify({ amountDays }),
-        });
-      });
+    await this.mutex.run(() => this.dataSource.transaction((em) => this.confirmDeductionInTx(em, employeeId, locationId, amountDays, requestId)));
+  }
+
+  async confirmDeductionInTx(em: EntityManager, employeeId: string, locationId: string, amountDays: number, requestId: string): Promise<void> {
+    const b = await em.findOneByOrFail(Balance, { employeeId, locationId });
+    b.pendingHolds -= amountDays;
+    b.taken += amountDays;
+    await em.save(b);
+    await this.ledger.append(em, {
+      employeeId, locationId, entryType: 'DEDUCTION_CONFIRMED',
+      amount: 0, balanceAfter: available(b), requestId,
+      detail: JSON.stringify({ amountDays }),
     });
   }
 
