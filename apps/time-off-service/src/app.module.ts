@@ -1,6 +1,7 @@
 // apps/time-off-service/src/app.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { Balance } from './entities/balance.entity';
 import { TimeOffRequest } from './entities/time-off-request.entity';
 import { LedgerEntry } from './entities/ledger-entry.entity';
@@ -9,7 +10,6 @@ import { LedgerModule } from './ledger/ledger.module';
 import { BalancesModule } from './balances/balances.module';
 import { RequestsModule } from './requests/requests.module';
 import { HcmSyncModule } from './hcm-sync/hcm-sync.module';
-import { BalancesController } from './balances/balances.controller';
 import { RequestsController } from './requests/requests.controller';
 
 @Module({
@@ -22,11 +22,12 @@ import { RequestsController } from './requests/requests.controller';
         synchronize: true, // take-home scope; production would use migrations (TRD §12)
       }),
     }),
+    ...(process.env.NODE_ENV !== 'test' ? [ScheduleModule.forRoot()] : []),
     LedgerModule,
     BalancesModule,
     RequestsModule,
     HcmSyncModule,
   ],
-  controllers: [BalancesController, RequestsController],
+  controllers: [RequestsController],
 })
 export class AppModule {}

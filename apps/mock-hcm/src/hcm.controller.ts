@@ -46,7 +46,9 @@ export class HcmController {
   }
 
   @Get('batch')
-  getBatch() {
+  async getBatch() {
+    if (this.store.chaosMode === 'timeout') await sleep(chaosTimeoutMs());
+    if (this.store.chaosMode === 'error500') throw new HttpException('chaos', 500);
     return { balances: this.store.all() };
   }
 }
