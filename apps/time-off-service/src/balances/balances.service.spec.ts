@@ -110,4 +110,27 @@ describe('BalancesService', () => {
     ]);
     expect(await ledger.sumFor(ds.manager, 'e1', 'l1')).toBe(-3); // I1 still holds
   });
+
+  // Recovery path: HCM clawback drives available negative; a subsequent
+  // anniversary/yearly-refresh batch must restore the projection without
+  // touching pending holds, and I1 must hold across the whole sequence.
+  it('applyBatch bonus after a clawback recovers from a negative available (C1 recovery path)', async () => {
+    await svc.placeHold('e1', 'l1', 8, 'r1');
+    await svc.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 5 },
+    ]);
+    expect(available(await get())).toBe(-3); // precondition: negative
+
+    // HR posts a bonus / yearly refresh in HCM. Batch sync arrives.
+    const summary = await svc.applyBatch([
+      { employeeId: 'e1', locationId: 'l1', balanceDays: 20 },
+    ]);
+
+    const b = await get();
+    expect(b.accruedBaseline).toBe(20);
+    expect(b.pendingHolds).toBe(8); // hold untouched across both batches
+    expect(available(b)).toBe(12); // recovered
+    expect(summary.negative).toEqual([]); // no longer flagged
+    expect(await ledger.sumFor(ds.manager, 'e1', 'l1')).toBe(12); // I1 still holds
+  });
 });

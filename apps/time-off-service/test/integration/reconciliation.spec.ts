@@ -9,6 +9,7 @@ import { buildTestApp, bootMockHcm, MockHcm } from '../utils';
 import { RequestsService } from '../../src/requests/requests.service';
 import { OutboxDispatcher } from '../../src/hcm-sync/outbox-dispatcher';
 import { BalancesService } from '../../src/balances/balances.service';
+import { ReconciliationService } from '../../src/hcm-sync/reconciliation.service';
 
 describe('reconciliation + ops endpoints', () => {
   let app: INestApplication;
@@ -94,6 +95,56 @@ describe('reconciliation + ops endpoints', () => {
     await http().get('/health').expect(200);
     hcm.store.chaosMode = 'error500';
     await http().get('/health').expect(503);
+  });
+
+  it('SYNC_FAILED requests are not resurrected by a later batch sync', async () => {
+    await http().post('/sync/batch').expect(202);
+    const requests = app.get(RequestsService);
+    const req = await requests.submit(
+      { employeeId: 'e1', locationId: 'l1', amountDays: 3 },
+      'sf-1',
+    );
+    await requests.approve(req.id, 'm1');
+
+    // Drive request to SYNC_FAILED by exhausting retries against a broken HCM.
+    hcm.store.chaosMode = 'error500';
+    const dispatcher = app.get(OutboxDispatcher);
+    for (let i = 0; i < 8; i++)
+      await dispatcher.processOnce({ ignoreBackoff: true });
+
+    expect((await requests.getById(req.id)).status).toBe('SYNC_FAILED');
+    // Hold was released on SYNC_FAILED, so this baseline should match HCM (10).
+    expect((await http().get('/balances/e1/l1')).body).toMatchObject({
+      pendingHolds: 0,
+      availableDays: 10,
+    });
+
+    // HCM heals, baseline shifts (e.g., HR refresh), batch sync arrives.
+    hcm.store.chaosMode = 'healthy';
+    hcm.store.set('e1', 'l1', 12);
+    await http().post('/sync/batch').expect(202);
+
+    // The failed request stays failed — no zombie hold, no auto-retry, no
+    // resurrection. Drift report still surfaces it for manager action.
+    const after = await requests.getById(req.id);
+    expect(after.status).toBe('SYNC_FAILED');
+    expect(after.failureReason).toBeTruthy();
+    expect((await http().get('/balances/e1/l1')).body).toMatchObject({
+      accruedBaseline: 12,
+      pendingHolds: 0,
+      availableDays: 12,
+    });
+    const drift = await app.get(ReconciliationService).driftReport();
+    expect(
+      drift.syncFailedRequests.map((r: { id: string }) => r.id),
+    ).toContain(req.id);
+
+    // Fresh requests work normally against the refreshed baseline.
+    const ok = await requests.submit(
+      { employeeId: 'e1', locationId: 'l1', amountDays: 4 },
+      'sf-fresh',
+    );
+    expect(ok.status).toBe('PENDING');
   });
 
   it('employees absent from a batch are left untouched (absence is not deletion)', async () => {

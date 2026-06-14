@@ -124,4 +124,29 @@ describe('RequestsService', () => {
     const b = await bal();
     expect(b.pendingHolds).toBe(3); // exactly one hold
   });
+
+  // D4: concurrent *distinct* submits (different idempotency keys) for the same
+  // (employee, location) must collectively respect available. Idem-key dedup
+  // (D3) is not the same defense — two genuine requests racing for the last
+  // few days is the actual production case.
+  it('concurrent distinct-key submits cannot oversubscribe (D4)', async () => {
+    // Available = 10. Two genuine requests want 6 + 7 days each. Only one can fit.
+    const results = await Promise.allSettled([
+      submit('distinct-a', 6),
+      submit('distinct-b', 7),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject(
+      new AppError('INSUFFICIENT_BALANCE', 422),
+    );
+
+    // The surviving hold is the one that got the mutex first; its amount is
+    // 6 or 7, never both. Balance reflects exactly one of them.
+    const b = await bal();
+    expect([6, 7]).toContain(b.pendingHolds);
+    expect(available(b)).toBe(10 - b.pendingHolds);
+  });
 });

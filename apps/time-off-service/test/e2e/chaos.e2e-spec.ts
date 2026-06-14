@@ -117,6 +117,20 @@ describe('chaos e2e: service vs hostile HCM', () => {
     });
   });
 
+  // The error500 path is fenced in reconciliation.spec.ts; this fences the
+  // timeout path specifically — /health must fail fast on the client timeout
+  // (HCM_TIMEOUT_MS=300), not block for the mock HCM's chaos sleep
+  // (MOCK_HCM_TIMEOUT_MS=2000). A regression here would freeze liveness probes.
+  it('GET /health under HCM timeout returns 503 fast, not hung', async () => {
+    hcm.store.chaosMode = 'timeout';
+    const startedAt = Date.now();
+    const res = await http().get('/health');
+    const elapsedMs = Date.now() - startedAt;
+    expect(res.status).toBe(503);
+    // Generous upper bound for CI jitter, well under the 2s chaos sleep.
+    expect(elapsedMs).toBeLessThan(1500);
+  });
+
   it('duplicate submission over the wire: same Idempotency-Key, one hold', async () => {
     const body = { employeeId: 'e1', locationId: 'l1', amountDays: 3 };
     const r1 = await http()

@@ -135,4 +135,36 @@ describe('HTTP API', () => {
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.title).toBe('NOT_FOUND');
   });
+
+  // Fences input-validation behavior at the HTTP boundary. The service throws
+  // VALIDATION_FAILED for non-positive amountDays today; this test guards against
+  // a future refactor that drops the check and lets the SQL CHECK constraint
+  // surface a 500 instead.
+  it.each([
+    ['zero', 0],
+    ['negative', -3],
+    ['NaN/undefined', undefined],
+  ])(
+    'submit with %s amountDays → 400 VALIDATION_FAILED (no row written, no hold placed)',
+    async (_label, amountDays) => {
+      const key = `bad-${String(amountDays)}`;
+      const res = await http()
+        .post('/time-off-requests')
+        .set('Idempotency-Key', key)
+        .send({ employeeId: 'e1', locationId: 'l1', amountDays })
+        .expect(400);
+      expect(res.headers['content-type']).toContain('application/problem+json');
+      expect(res.body.title).toBe('VALIDATION_FAILED');
+
+      // No request created for the rejected key
+      await http().get(`/time-off-requests?employeeId=e1`).expect(200);
+      const list = await http().get(`/time-off-requests?employeeId=e1`);
+      expect(list.body).toHaveLength(0);
+
+      // Balance untouched
+      const bal = await http().get('/balances/e1/l1').expect(200);
+      expect(bal.body.pendingHolds).toBe(0);
+      expect(bal.body.availableDays).toBe(10);
+    },
+  );
 });
